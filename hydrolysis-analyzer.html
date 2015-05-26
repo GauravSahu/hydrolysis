@@ -35,12 +35,12 @@ var hydrolysis = require('hydrolysis');
       },
 
       /**
-       * Whether _all_ dependencies should be loaded and analyzed.
-       *
-       * Turning this on will probably slow down the load process dramatically.
+       * What dependencies should be loaded and analyzed.
+       * If true, all dependencies will be loaded. This will slow down load process dramatically
+       * If string, interpret string as regular expression that matches dependencies to load
        */
       transitive: {
-        type: Boolean,
+        type: Object,
       },
 
       /**
@@ -49,6 +49,7 @@ var hydrolysis = require('hydrolysis');
        */
       clean: {
         type: Boolean,
+        value: true
       },
 
       /** The resultant `Analyzer` object from Hydrolysis. */
@@ -71,6 +72,43 @@ var hydrolysis = require('hydrolysis');
       this.analyze();
     },
 
+    // @return filter function
+    _getFilter: function() {
+      switch( typeof this.transitive) {
+        case 'boolean':
+          return this.transitive ? function() { return false; }  : null;
+        case 'string': {
+          if (this.transitive === '') {
+            return function(uri) {
+              console.log(uri);
+              return false;
+            };
+          } else {
+            if (this.transitive[0] === '/') {
+              console.warn('possible error: transitive strings are naked regex, no need for /');
+            }
+            var regex = new RegExp(this.transitive);
+            return function hydrolysisFilter(x) {
+              console.log(x);
+              var match = x.match(regex);
+              if (match) {
+                console.log("processing", x);
+                return false;
+              }
+              else {
+                console.log("ignoring", x);
+                return true;
+              }
+            }
+          }
+        }
+        break;
+        default:
+          // undefined and null are also valid, but we can't test
+          return null;
+        break;
+      }
+    },
     /**
      * Begins loading the imports referenced by `src`.
      *
@@ -87,10 +125,9 @@ var hydrolysis = require('hydrolysis');
         return;
       }
       this._setLoading(true);
-
       var options = {
         clean:  this.clean,
-        filter: this.transitive ? function() { return false; } : null,
+        filter:  this._getFilter() //this.transitive ? function() { return false; } : null//
       };
 
       var baseUri = this.ownerDocument.baseURI;
